@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+
+# Copyright (C) 2020  Boris DAIX
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see
+# <https://www.gnu.org/licenses/>.
+
+"""Module for summing sale statements at Dubquake Records."""
+
+__title__ = 'dq_statements'
+__version__ = '0.1'
+__author__ = 'Boris DAIX'
+__license__ = 'GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007'
+__copyright__ = 'Copyright (C) 2020'
+
+from logging import basicConfig, DEBUG, error, info
+from sys import argv
+
+from openpyxl import load_workbook, Workbook
+
+def notice():
+    """Print notice when starting."""
+
+    print("%s %s  %s  %s" % (__title__, __version__,
+                             __copyright__, __author__))
+    print()
+    print('This program comes with ABSOLUTELY NO WARRANTY; for details see COPYING.')
+    print('This is free software and you are welcome to redistribute it')
+    print('under certain conditions; see COPYING for details.')
+    print()
+
+def is_emtpy(row):
+    """Is the given `row' empty?"""
+
+    return not (row[0].value or row[1].value)
+
+def get_header_lines(sheet):
+    """Take the three first lines of the given `sheet'."""
+
+    header_lines = []
+
+    for row in sheet.iter_rows(min_row=1, min_col=1, max_row=3, max_col=6):
+        header_lines.append(tuple([cell.value for cell in row]))
+
+    return header_lines
+
+def get_conversion_rate(formula):
+    """Extract the conversion rate from the given `formula'."""
+
+    return float(formula.split(' * ')[1] or '1')
+
+def get_summed_statements(sheet):
+    """Parse the given `sheet' and return summed statements."""
+
+    currencies = {}
+    statements = {}
+    total = 0
+
+    for row in sheet.iter_rows(min_row=5, min_col=2, max_col=13):
+        if not is_emtpy(row):
+            quantity = row[3].value
+            currency = row[5].value
+
+            if currency not in currencies.keys():
+                currencies[currency] = get_conversion_rate(row[11].value)
+
+            gain = quantity * row[4].value * \
+                currencies[currency] * (1 - row[10].value)
+            piece = (row[0].value, row[1].value, row[7].value,
+                     row[8].value, row[9].value)
+
+            if piece in statements:
+                statements[piece] += gain
+            else:
+                statements[piece] = gain
+
+            total += gain
+
+    info("Made %s EUR on this platform." % total)
+    return statements
+
+def add_header_lines(header_lines, sheet):
+    """Add the given `header_lines' on top of the given `sheet'."""
+
+    header_lines.append(('ISRC', 'CATALOG NUMBER',
+                         'ARTIST', 'TITLE', 'LABEL', 'TOTAL NET IN EUR'))
+
+    for row in header_lines:
+        sheet.append(row)
+
+def add_summed_statements(summed_statements, sheet):
+    """Add the given `summed_statements' to the given `sheet'."""
+
+    for piece, gain in summed_statements.items():
+        sheet.append((piece[0], piece[1],
+                      piece[2], piece[3], piece[4], gain))
+    return sheet
+
+def sum_statements(input_filename, output_filename):
+    """Sum statements of the given `input_filename' into
+    the given `output_filename'."""
+
+    book = load_workbook(input_filename, read_only=True)
+    output = Workbook()
+
+    output.remove_sheet(output.get_sheet_by_name('Sheet'))
+
+    for sheetname in book.sheetnames:
+        if sheetname != 'Summary':
+            info("Processing worksheet %s." % sheetname)
+
+            sheet = book.get_sheet_by_name(sheetname)
+
+            header_lines = get_header_lines(sheet)
+            summed_statements = get_summed_statements(sheet)
+
+            output.create_sheet(title=sheetname)
+
+            sheet = output.get_sheet_by_name(sheetname)
+
+            add_header_lines(header_lines, sheet)
+            add_summed_statements(summed_statements, sheet)
+
+            info("Worksheet %s processed." % sheetname)
+        else:
+            info("Worksheet %s dropped." % sheetname)
+
+    output.save(output_filename)
+    info("Workbook %s saved." % output_filename)
+
+if __name__ == '__main__':
+    basicConfig(format='[%(levelname)s] %(message)s', level=DEBUG)
+    notice()
+
+    if len(argv) == 2:
+        info("Processing of workbook %s." % argv[1])
+        sum_statements(argv[1], 'output.xlsx')
+        info("Workbook %s processed." % argv[1])
+    else:
+        error("%s: wrong number of arguments." % len(argv))
+        error("Usage: %s <input_file>" % argv[0])
+        exit(1)
