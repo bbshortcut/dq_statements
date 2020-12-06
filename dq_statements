@@ -105,7 +105,23 @@ def add_summed_statements(summed_statements, sheet):
                       piece[2], piece[3], piece[4], gain))
     return sheet
 
+def add_statement_sheet(output, sheetname, header_lines, statements):
+    """Add a new sheet named `sheetname' to the given workbook `output'
+    with `header_lines' and `statements'."""
+
+    output.create_sheet(title=sheetname)
+
+    sheet = output.get_sheet_by_name(sheetname)
+
+    # This has side-effect on given header lines
+    header_lines.append(('ISRC', 'CATALOG NUMBER', 'ARTIST', 'TITLE',
+                         'LABEL', 'TOTAL NET IN EUR'))
+
+    add_header_lines(header_lines, sheet)
+    add_summed_statements(statements, sheet)
+
 def add_platform_statements(statements_a, statements_b):
+
     """Add the given statements and return the result."""
 
     for piece, gain in statements_b.items():
@@ -138,20 +154,13 @@ def sum_statements(input_filename, output_filename):
             header_lines = get_header_lines(sheet)
             summed_statements = get_summed_statements(sheet)
 
-            output.create_sheet(title=sheetname)
-
-            sheet = output.get_sheet_by_name(sheetname)
-
-            header_lines.append(('ISRC', 'CATALOG NUMBER',
-                                 'ARTIST', 'TITLE', 'LABEL',
-                                 'TOTAL NET IN EUR'))
-
-            add_header_lines(header_lines, sheet)
-            add_summed_statements(summed_statements, sheet)
+            add_statement_sheet(output, sheetname, header_lines,
+                                summed_statements)
 
             info("Worksheet %s processed." % sheetname)
 
             if not cross_platform_headers:
+                # These header lines already include column labels
                 cross_platform_headers = header_lines
                 platform_header_line = list(header_lines[1])
                 platform_header_line[0] = \
@@ -167,12 +176,8 @@ def sum_statements(input_filename, output_filename):
     cross_platform_statements = \
         reduce(add_platform_statements, platform_statements)
 
-    output.create_sheet(title=cross_platform_name)
-
-    sheet = output.get_sheet_by_name(cross_platform_name)
-
-    add_header_lines(cross_platform_headers, sheet)
-    add_summed_statements(cross_platform_statements, sheet)
+    add_statement_sheet(output, cross_platform_name,
+                        cross_platform_headers, cross_platform_statements)
 
     info("Worksheet %s processed." % cross_platform_name)
 
