@@ -175,6 +175,9 @@ def sum_statements(input_filename, output_filename):
 
     cross_platform_statements = \
         reduce(add_platform_statements, platform_statements)
+    total = sum(cross_platform_statements.values())
+
+    info("Made %s EUR on all platforms." % total)
 
     add_statement_sheet(output, cross_platform_name,
                         cross_platform_headers, cross_platform_statements)
