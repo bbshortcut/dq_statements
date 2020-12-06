@@ -24,6 +24,7 @@ __author__ = 'Boris DAIX'
 __license__ = 'GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007'
 __copyright__ = 'Copyright (C) 2020'
 
+from functools import reduce
 from logging import basicConfig, DEBUG, error, info
 from sys import argv
 
@@ -93,9 +94,6 @@ def get_summed_statements(sheet):
 def add_header_lines(header_lines, sheet):
     """Add the given `header_lines' on top of the given `sheet'."""
 
-    header_lines.append(('ISRC', 'CATALOG NUMBER',
-                         'ARTIST', 'TITLE', 'LABEL', 'TOTAL NET IN EUR'))
-
     for row in header_lines:
         sheet.append(row)
 
@@ -107,10 +105,25 @@ def add_summed_statements(summed_statements, sheet):
                       piece[2], piece[3], piece[4], gain))
     return sheet
 
+def add_platform_statements(statements_a, statements_b):
+    """Add the given statements and return the result."""
+
+    for piece, gain in statements_b.items():
+        if piece in statements_a:
+            statements_a[piece] += gain
+        else:
+            statements_a[piece] = gain
+
+    return statements_a
+
 def sum_statements(input_filename, output_filename):
+
     """Sum statements of the given `input_filename' into
     the given `output_filename'."""
 
+    cross_platform_name = 'Cross-Platform'
+    cross_platform_headers = None
+    platform_statements = []
     book = load_workbook(input_filename, read_only=True)
     output = Workbook()
 
@@ -129,12 +142,39 @@ def sum_statements(input_filename, output_filename):
 
             sheet = output.get_sheet_by_name(sheetname)
 
+            header_lines.append(('ISRC', 'CATALOG NUMBER',
+                                 'ARTIST', 'TITLE', 'LABEL',
+                                 'TOTAL NET IN EUR'))
+
             add_header_lines(header_lines, sheet)
             add_summed_statements(summed_statements, sheet)
 
             info("Worksheet %s processed." % sheetname)
+
+            if not cross_platform_headers:
+                cross_platform_headers = header_lines
+                platform_header_line = list(header_lines[1])
+                platform_header_line[0] = \
+                    platform_header_line[0].replace(sheetname, cross_platform_name)
+                cross_platform_headers[1] = tuple(platform_header_line)
+
+            platform_statements.append(summed_statements)
         else:
             info("Worksheet %s dropped." % sheetname)
+
+    info("Processing worksheet %s." % cross_platform_name)
+
+    cross_platform_statements = \
+        reduce(add_platform_statements, platform_statements)
+
+    output.create_sheet(title=cross_platform_name)
+
+    sheet = output.get_sheet_by_name(cross_platform_name)
+
+    add_header_lines(cross_platform_headers, sheet)
+    add_summed_statements(cross_platform_statements, sheet)
+
+    info("Worksheet %s processed." % cross_platform_name)
 
     output.save(output_filename)
     info("Workbook %s saved." % output_filename)
