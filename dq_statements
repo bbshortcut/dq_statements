@@ -19,7 +19,7 @@
 """Module for summing sale statements at Dubquake Records."""
 
 __title__ = 'dq_statements'
-__version__ = '0.1'
+__version__ = '0.2'
 __author__ = 'Boris DAIX'
 __license__ = 'GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007'
 __copyright__ = 'Copyright (C) 2020'
